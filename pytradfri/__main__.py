@@ -20,7 +20,7 @@ CONFIG_FILE = "tradfri_standalone_psk.conf"
 # pylint: disable=invalid-name, not-an-iterable, unsubscriptable-object
 
 
-if __name__ == "__main__":
+def main():
     logging.basicConfig(level=logging.DEBUG)
 
     parser = argparse.ArgumentParser()
@@ -36,44 +36,12 @@ if __name__ == "__main__":
     )
     org_args = parser.parse_args()
 
-    if org_args.host not in load_json(CONFIG_FILE) and org_args.key is None:
-        print(
-            "Please provide the 'Security Code' on the back of your "
-            "Tradfri gateway:",
-            end=" ",
-        )
-        key = input().strip()
-        if len(key) != 16:
-            raise PytradfriError(
-                "'Security Code' has to be exactly" + "16 characters long."
-            )
-        org_args.key = key
+    request_security_code(org_args)
 
     conf = load_json(CONFIG_FILE)
 
-    try:
-        identity = conf[org_args.host].get("identity")
-        psk = conf[org_args.host].get("key")
-        api_factory = APIFactory(host=org_args.host, psk_id=identity, psk=psk)
-    except KeyError:
-        identity = uuid.uuid4().hex
-        api_factory = APIFactory(host=org_args.host, psk_id=identity)
-
-        try:
-            psk = api_factory.generate_psk(org_args.key)
-            print("Generated PSK: ", psk)
-
-            conf[org_args.host] = {"identity": identity, "key": psk}
-            save_json(CONFIG_FILE, conf)
-        except AttributeError as exc:
-            raise PytradfriError(
-                "Please provide the 'Security Code' on the "
-                "back of your Tradfri gateway using the "
-                "-K flag."
-            ) from exc
-
+    api_factory = initialize_api_factory(conf, org_args)
     api = api_factory.request
-
     gateway = Gateway()
     devices_commands = api(gateway.get_devices())
     devices = api(devices_commands)
@@ -135,3 +103,46 @@ if __name__ == "__main__":
     print("> tasks")
     print("> dump_devices()")
     print("> dump_all()")
+
+
+def request_security_code(org_args):
+    if org_args.host not in load_json(CONFIG_FILE) and org_args.key is None:
+        print(
+            "Please provide the 'Security Code' on the back of√your "
+            "Tradfri gateway:",
+            end=" ",
+        )
+        key = input().strip()
+        if len(key) != 16:
+            raise PytradfriError(
+                "'Security Code' has to be exactly" + "16 characters long."
+            )
+        org_args.key = key
+
+
+def initialize_api_factory(conf, org_args):
+    try:
+        identity = conf[org_args.host].get("identity")
+        psk = conf[org_args.host].get("key")
+        api_factory = APIFactory(host=org_args.host, psk_id=identity, psk=psk)
+    except KeyError:
+        identity = uuid.uuid4().hex
+        api_factory = APIFactory(host=org_args.host, psk_id=identity)
+
+        try:
+            psk = api_factory.generate_psk(org_args.key)
+            print("Generated PSK: ", psk)
+
+            conf[org_args.host] = {"identity": identity, "key": psk}
+            save_json(CONFIG_FILE, conf)
+        except AttributeError as exc:
+            raise PytradfriError(
+                "Please provide the 'Security Code' on the "
+                "back of your Tradfri gateway using the "
+                "-K flag."
+            ) from exc
+    return api_factory
+
+
+if __name__ == "__main__":
+    main()
